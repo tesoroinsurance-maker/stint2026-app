@@ -80,6 +80,22 @@ window.storage = {
 </style>
 </head>
 <body>
+<script>
+  // 어떤 오류가 발생하든 화면에 직접 표시 (진단용 안전장치)
+  function __showFatalError(msg) {
+    var el = document.getElementById("root");
+    if (!el) { el = document.createElement("div"); el.id = "root"; document.body.appendChild(el); }
+    el.innerHTML =
+      '<div style="padding:24px;color:#D64545;font-family:monospace;white-space:pre-wrap;font-size:13px;">오류 발생:\n' +
+      String(msg).replace(/</g, "&lt;") + '</div>';
+  }
+  window.addEventListener("error", function (e) {
+    __showFatalError((e.error && e.error.stack) || e.message || e);
+  });
+  window.addEventListener("unhandledrejection", function (e) {
+    __showFatalError((e.reason && e.reason.stack) || e.reason || "unhandled promise rejection");
+  });
+</script>
 <div id="root"></div>
 <script type="text/plain" id="app-source">
 import React, { useState, useRef, useEffect, useCallback, useMemo } from "react";
