@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>[STINT 2026] 관리자</title>
+<meta name="robots" content="noindex, nofollow" />
+<script src="https://cdn.tailwindcss.com"></script>
+<script type="importmap">
+{
+  "imports": {
+    "react": "https://esm.sh/react@18",
+    "react/jsx-runtime": "https://esm.sh/react@18/jsx-runtime",
+    "react/jsx-dev-runtime": "https://esm.sh/react@18/jsx-dev-runtime",
+    "react-dom": "https://esm.sh/react-dom@18",
+    "react-dom/client": "https://esm.sh/react-dom@18/client",
+    "lucide-react": "https://esm.sh/lucide-react@0.383.0?external=react"
+  }
+}
+</script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<style>
+  body { margin: 0; font-family: 'Pretendard', 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif; }
+  #root { min-height: 100vh; }
+</style>
+</head>
+<body>
+<script>
+  // 어떤 오류가 발생하든 화면에 직접 표시 (진단용 안전장치)
+  function __showFatalError(msg) {
+    var el = document.getElementById("root");
+    if (!el) { el = document.createElement("div"); el.id = "root"; document.body.appendChild(el); }
+    el.innerHTML =
+      '<div style="padding:24px;color:#D64545;font-family:monospace;white-space:pre-wrap;font-size:13px;">오류 발생:\n' +
+      String(msg).replace(/</g, "&lt;") + '</div>';
+  }
+  window.addEventListener("error", function (e) {
+    __showFatalError((e.error && e.error.stack) || e.message || e);
+  });
+  window.addEventListener("unhandledrejection", function (e) {
+    __showFatalError((e.reason && e.reason.stack) || e.reason || "unhandled promise rejection");
+  });
+</script>
+<div id="root"></div>
+<script type="text/plain" id="app-source">
+import React, { useState, useEffect } from "react";
+import { LockKeyhole, Clock, ListOrdered, Loader2, AlertTriangle, ChevronDown, ChevronUp, ArrowRight, BarChart3 } from "lucide-react";
+
+// 메인 앱(index.html)과 반드시 동일하게 맞춰야 하는 값들
+const BACKEND_URL = "https://stint2026-backend.onrender.com"; // 메인 앱과 동일한 백엔드 주소로 맞춰주세요
+const ADMIN_SECRET = "STINT26-Qna-7Kx2"; // 백엔드 서버의 ADMIN_SECRET 환경변수와 반드시 같아야 합니다
+const CONFIG_KEY = "stint2026_bot_config"; // 메인 앱과 동일한 키 (이용기간 설정 공유)
+const STORAGE_PREFIX = "stint_"; // 메인 앱의 localStorage 저장 방식과 동일하게 맞춤
+
+const COLOR = {
+  navy: "#0B3D62",
+  navyDark: "#07293F",
+  teal: "#1C7293",
+  gold: "#F2A93B",
+  bg: "#F6F9FB",
+  red: "#D64545",
+  green: "#2E9E6D",
+  cardBorder: "#E4EAEE",
+  textMuted: "#6B7A85",
+};
+
+function loadConfig() {
+  try {
+    const raw = localStorage.getItem(STORAGE_PREFIX + CONFIG_KEY);
+    if (!raw) return { expiry: null };
+    return JSON.parse(raw);
+  } catch (e) {
+    return { expiry: null };
+  }
+}
+
+function saveConfig(config) {
+  try {
+    localStorage.setItem(STORAGE_PREFIX + CONFIG_KEY, JSON.stringify(config));
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+function AdminApp() {
+  const [authed, setAuthed] = useState(false);
+  const [codeInput, setCodeInput] = useState("");
+  const [error, setError] = useState(false);
+
+  const [log, setLog] = useState([]);
+  const [logLoading, setLogLoading] = useState(false);
+  const [expanded, setExpanded] = useState(null);
+
+  const [quizStats, setQuizStats] = useState(null);
+
+  const [config, setConfig] = useState(() => loadConfig());
+  const [expiryInput, setExpiryInput] = useState(() => {
+    const c = loadConfig();
+    return c.expiry ? c.expiry.slice(0, 16) : "";
+  });
+  const [savingExpiry, setSavingExpiry] = useState(false);
+  const [expirySaved, setExpirySaved] = useState(false);
+
+  const login = async () => {
+    if (codeInput.trim() !== ADMIN_SECRET) {
+      setError(true);
+      return;
+    }
+    setAuthed(true);
+    setError(false);
+    setLogLoading(true);
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/admin/qna`, {
+        headers: { "x-admin-key": ADMIN_SECRET },
+      });
+      const data = await res.json();
+      setLog(data.ok ? data.records : []);
+    } catch (e) {
+      setLog([]);
+    }
+    setLogLoading(false);
+
+    try {
+      const statsRes = await fetch(`${BACKEND_URL}/api/quiz/stats`);
+      const statsData = await statsRes.json();
+      setQuizStats(statsData.ok ? statsData : null);
+    } catch (e) {
+      setQuizStats(null);
+    }
+  };
+
+  const onSaveExpiry = () => {
+    setSavingExpiry(true);
+    setExpirySaved(false);
+    const iso = expiryInput ? new Date(expiryInput).toISOString() : null;
+    const newConfig = { expiry: iso };
+    saveConfig(newConfig);
+    setConfig(newConfig);
+    setSavingExpiry(false);
+    setExpirySaved(true);
+  };
+
+  const onClearExpiry = () => {
+    setSavingExpiry(true);
+    setExpirySaved(false);
+    saveConfig({ expiry: null });
+    setConfig({ expiry: null });
+    setExpiryInput("");
+    setSavingExpiry(false);
+    setExpirySaved(true);
+  };
+
+  const currentExpiryLabel = config && config.expiry
+    ? new Date(config.expiry).toLocaleString("ko-KR", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })
+    : "제한 없음";
+
+  return (
+    <div
+      className="min-h-screen w-full flex flex-col items-center"
+      style={{ background: `linear-gradient(160deg, ${COLOR.navyDark}, ${COLOR.navy} 55%, ${COLOR.teal})` }}
+    >
+      <div className="w-full max-w-2xl px-5 py-6 flex-1 flex flex-col">
+        <div className="mb-5">
+          <p className="text-xs font-semibold tracking-wide" style={{ color: "rgba(255,255,255,0.6)" }}>STINT × TESORO</p>
+          <h1 className="text-white font-black text-lg leading-tight">[STINT 2026] 관리자</h1>
+        </div>
+
+        {!authed && (
+          <div className="flex-1 flex flex-col justify-center">
+            <div className="bg-white rounded-2xl shadow-2xl p-8" style={{ boxShadow: "0 20px 60px rgba(0,0,0,0.35)" }}>
+              <div className="flex justify-center mb-5">
+                <div className="w-16 h-16 rounded-full flex items-center justify-center" style={{ background: COLOR.navy }}>
+                  <LockKeyhole size={26} color={COLOR.gold} />
+                </div>
+              </div>
+              <h2 className="text-center text-lg font-black mb-1" style={{ color: COLOR.navy }}>관리자 접속코드</h2>
+              <p className="text-center text-sm mb-6" style={{ color: COLOR.textMuted }}>질문 기록을 조회하려면 관리자 코드를 입력하세요</p>
+              <div className="flex items-center gap-2 border-2 rounded-xl px-4 py-3 mb-3" style={{ borderColor: error ? COLOR.red : COLOR.cardBorder }}>
+                <LockKeyhole size={17} color={COLOR.teal} />
+                <input
+                  type="password"
+                  value={codeInput}
+                  onChange={(e) => { setCodeInput(e.target.value); setError(false); }}
+                  onKeyDown={(e) => { if (e.key === "Enter") login(); }}
+                  placeholder="접속코드 입력"
+                  className="flex-1 outline-none text-sm"
+                />
+              </div>
+              {error && <p className="text-xs mb-4" style={{ color: COLOR.red }}>코드가 올바르지 않습니다.</p>}
+              <button
+                onClick={login}
+                className="w-full py-3.5 rounded-xl font-bold text-white flex items-center justify-center gap-2 transition-transform active:scale-95"
+                style={{ background: `linear-gradient(90deg, ${COLOR.navy}, ${COLOR.teal})` }}
+              >
+                확인 <ArrowRight size={18} />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {authed && (
+          <div className="flex-1 flex flex-col min-h-0">
+            <div className="bg-white rounded-2xl p-5 mb-3 shadow-2xl" style={{ boxShadow: "0 16px 40px rgba(0,0,0,0.3)" }}>
+              <div className="flex items-center gap-2 mb-3">
+                <Clock size={18} color={COLOR.teal} />
+                <p className="font-bold text-sm" style={{ color: COLOR.navy }}>이용기간 설정</p>
+              </div>
+              <p className="text-xs mb-3" style={{ color: COLOR.textMuted }}>
+                현재 설정: <span className="font-bold" style={{ color: COLOR.navy }}>{currentExpiryLabel}</span>
+              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  type="datetime-local"
+                  value={expiryInput}
+                  onChange={(e) => setExpiryInput(e.target.value)}
+                  className="border-2 rounded-xl px-3 py-2 text-sm outline-none"
+                  style={{ borderColor: COLOR.cardBorder }}
+                />
+                <button
+                  onClick={onSaveExpiry}
+                  disabled={savingExpiry || !expiryInput}
+                  className="px-4 py-2 rounded-xl font-bold text-white text-xs disabled:opacity-40"
+                  style={{ background: `linear-gradient(90deg, ${COLOR.navy}, ${COLOR.teal})` }}
+                >
+                  {savingExpiry ? "저장 중..." : "마감일 저장"}
+                </button>
+                <button
+                  onClick={onClearExpiry}
+                  disabled={savingExpiry}
+                  className="px-4 py-2 rounded-xl font-bold text-xs"
+                  style={{ background: COLOR.bg, color: COLOR.textMuted }}
+                >
+                  제한 해제
+                </button>
+              </div>
+              {expirySaved && <p className="text-xs mt-2" style={{ color: COLOR.green }}>저장되었습니다.</p>}
+              <p className="text-xs mt-2" style={{ color: COLOR.textMuted }}>
+                주의: 이 브라우저에 저장되는 설정입니다. 메인 챗봇 사이트와 이 관리자 페이지를 같은 도메인(예: tesoro2026.com)에서 여실 때만 서로 반영됩니다.
+              </p>
+            </div>
+
+            {quizStats && (
+              <div className="bg-white rounded-2xl p-5 mb-3 shadow-2xl" style={{ boxShadow: "0 16px 40px rgba(0,0,0,0.3)" }}>
+                <div className="flex items-center gap-2 mb-3">
+                  <BarChart3 size={18} color={COLOR.teal} />
+                  <p className="font-bold text-sm" style={{ color: COLOR.navy }}>퀴즈 통계</p>
+                </div>
+                <div className="flex gap-6">
+                  <div>
+                    <p className="text-xl font-black" style={{ color: COLOR.gold }}>{quizStats.count}</p>
+                    <p className="text-xs" style={{ color: COLOR.textMuted }}>참여자 수</p>
+                  </div>
+                  <div>
+                    <p className="text-xl font-black" style={{ color: COLOR.gold }}>{(quizStats.avg || 0).toFixed(1)}</p>
+                    <p className="text-xs" style={{ color: COLOR.textMuted }}>평균 점수</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="bg-white rounded-2xl p-5 mb-3 shadow-2xl flex items-center justify-between" style={{ boxShadow: "0 16px 40px rgba(0,0,0,0.3)" }}>
+              <div className="flex items-center gap-2">
+                <ListOrdered size={18} color={COLOR.teal} />
+                <div>
+                  <p className="font-bold text-sm" style={{ color: COLOR.navy }}>질문 기록 (질문 순서대로)</p>
+                  <p className="text-xs" style={{ color: COLOR.textMuted }}>가장 먼저 들어온 질문부터 순서대로 표시됩니다</p>
+                </div>
+              </div>
+              <div className="text-right flex-shrink-0">
+                <p className="text-xl font-black" style={{ color: COLOR.gold }}>{log.length}</p>
+                <p className="text-xs" style={{ color: COLOR.textMuted }}>총 질문 수</p>
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto flex flex-col gap-2.5" style={{ maxHeight: "62vh" }}>
+              {logLoading && (
+                <div className="flex items-center justify-center py-10 text-white gap-2">
+                  <Loader2 size={20} className="animate-spin" />
+                  <span className="text-sm">기록을 불러오는 중...</span>
+                </div>
+              )}
+              {!logLoading && log.length === 0 && (
+                <div className="bg-white rounded-2xl p-8 text-center" style={{ boxShadow: "0 8px 24px rgba(0,0,0,0.2)" }}>
+                  <AlertTriangle size={22} color={COLOR.textMuted} className="mx-auto mb-2" />
+                  <p className="text-sm" style={{ color: COLOR.textMuted }}>아직 기록된 질문이 없습니다.</p>
+                </div>
+              )}
+              {!logLoading && log.map((r, i) => {
+                const isOpen = expanded === i;
+                return (
+                  <div key={i} className="bg-white rounded-xl overflow-hidden" style={{ boxShadow: "0 6px 18px rgba(0,0,0,0.15)" }}>
+                    <button
+                      onClick={() => setExpanded(isOpen ? null : i)}
+                      className="w-full text-left px-4 py-3 flex items-center gap-3"
+                    >
+                      <div className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 text-white text-xs font-bold" style={{ background: COLOR.gold }}>
+                        {i + 1}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-xs font-bold" style={{ color: COLOR.navy }}>{r.name}{r.country ? ` (${r.country})` : ""}</span>
+                          <span className="text-xs flex items-center gap-1" style={{ color: COLOR.textMuted }}>
+                            <Clock size={10} /> {new Date(r.ts).toLocaleString("ko-KR")}
+                          </span>
+                        </div>
+                        <p className="text-sm font-medium truncate mt-0.5" style={{ color: "#16242E" }}>Q. {r.question}</p>
+                      </div>
+                      {isOpen ? <ChevronUp size={16} color={COLOR.textMuted} /> : <ChevronDown size={16} color={COLOR.textMuted} />}
+                    </button>
+                    {isOpen && (
+                      <div className="px-4 pb-4">
+                        <div className="rounded-lg px-3 py-2.5 text-sm leading-relaxed whitespace-pre-wrap" style={{ background: COLOR.bg, color: "#16242E" }}>
+                          {r.answer}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </div>
+      <div className="text-xs pb-4" style={{ color: "rgba(255,255,255,0.4)" }}>한국대학생선교회 STINT · 주식회사 떼소로</div>
+    </div>
+  );
+}
+
+import { createRoot } from "react-dom/client";
+const root = createRoot(document.getElementById("root"));
+root.render(<AdminApp />);
+</script>
+<script>
+  const __src = document.getElementById("app-source").textContent;
+  try {
+    const __out = Babel.transform(__src, {
+      presets: [["react", { runtime: "classic" }]],
+      sourceType: "module",
+      filename: "admin.jsx",
+    }).code;
+    const __blob = new Blob([__out], { type: "text/javascript" });
+    const __url = URL.createObjectURL(__blob);
+    import(__url).catch((e) => {
+      console.error("앱 실행 중 오류:", e);
+      document.getElementById("root").innerHTML =
+        '<div style="padding:24px;color:#D64545;font-family:sans-serif;">앱을 불러오는 중 오류가 발생했습니다. 콘솔(F12)을 확인해 주세요.<br/>' + String(e) + '</div>';
+    });
+  } catch (e) {
+    console.error("Babel 변환 중 오류:", e);
+    document.getElementById("root").innerHTML =
+      '<div style="padding:24px;color:#D64545;font-family:sans-serif;">코드 변환 중 오류가 발생했습니다. 콘솔(F12)을 확인해 주세요.<br/>' + String(e) + '</div>';
+  }
+</script>
+</body>
+</html>
