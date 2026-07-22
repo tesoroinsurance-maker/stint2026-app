@@ -562,7 +562,6 @@ function Stint2026Bot() {
     (async () => {
       const c = await loadConfig();
       setConfig(c);
-      setExpiryInput(c.expiry ? c.expiry.slice(0, 16) : "");
       setConfigLoading(false);
     })();
   }, []);
