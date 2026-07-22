@@ -1668,17 +1668,24 @@ root.render(<Stint2026Bot />);
 <script>
   // Babel을 수동으로 호출해 JSX를 변환합니다 (runtime: "classic" 고정 — react/jsx-runtime 관련 모듈 해석 문제를 피하기 위함)
   const __src = document.getElementById("app-source").textContent;
-  const __out = Babel.transform(__src, {
-    presets: [["react", { runtime: "classic" }]],
-    filename: "app.jsx",
-  }).code;
-  const __blob = new Blob([__out], { type: "text/javascript" });
-  const __url = URL.createObjectURL(__blob);
-  import(__url).catch((e) => {
-    console.error("앱 실행 중 오류:", e);
+  try {
+    const __out = Babel.transform(__src, {
+      presets: [["react", { runtime: "classic" }]],
+      sourceType: "module",
+      filename: "app.jsx",
+    }).code;
+    const __blob = new Blob([__out], { type: "text/javascript" });
+    const __url = URL.createObjectURL(__blob);
+    import(__url).catch((e) => {
+      console.error("앱 실행 중 오류:", e);
+      document.getElementById("root").innerHTML =
+        '<div style="padding:24px;color:#D64545;font-family:sans-serif;">앱을 불러오는 중 오류가 발생했습니다. 콘솔(F12)을 확인해 주세요.<br/>' + String(e) + '</div>';
+    });
+  } catch (e) {
+    console.error("Babel 변환 중 오류:", e);
     document.getElementById("root").innerHTML =
-      '<div style="padding:24px;color:#D64545;font-family:sans-serif;">앱을 불러오는 중 오류가 발생했습니다. 콘솔(F12)을 확인해 주세요.</div>';
-  });
+      '<div style="padding:24px;color:#D64545;font-family:sans-serif;">코드 변환 중 오류가 발생했습니다. 콘솔(F12)을 확인해 주세요.<br/>' + String(e) + '</div>';
+  }
 </script>
 <script>
   if ("serviceWorker" in navigator) {
